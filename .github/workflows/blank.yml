@@ -23,13 +23,34 @@ jobs:
 
     - name: Expose SSH via Cloudflared
       run: |
+        # Inicia túnel em background
         cloudflared tunnel --url tcp://localhost:22 --logfile cloudflared.log --no-autoupdate > cf.log 2>&1 &
         sleep 8
+
         echo "====================================="
         echo "🚀 SSH Túnel Criado via Cloudflared"
-        cat cf.log | grep -Eo "tcp://[a-zA-Z0-9.-]+:[0-9]+"
+
+        # Captura URL pública (tcp://xxxx.trycloudflare.com:PORTA)
+        CF_URL=$(grep -Eo "tcp://[a-zA-Z0-9.-]+:[0-9]+" cf.log | head -n 1)
+
+        if [ -z "$CF_URL" ]; then
+          echo "❌ Não foi possível capturar a URL do túnel"
+          echo "Logs do cloudflared:"
+          cat cf.log
+          exit 1
+        fi
+
+        echo "URL do túnel: $CF_URL"
+        CF_HOST=$(echo $CF_URL | sed -E 's#tcp://([^:]+):([0-9]+)#\1#')
+        CF_PORT=$(echo $CF_URL | sed -E 's#tcp://([^:]+):([0-9]+)#\2#')
+
+        echo "Host: $CF_HOST"
+        echo "Porta: $CF_PORT"
         echo "Usuário: runner"
         echo "Senha: P@ssw0rd"
+        echo ""
+        echo "Comando para conectar:"
+        echo "ssh runner@$CF_HOST -p $CF_PORT"
         echo "====================================="
 
     - name: Keep the job running
