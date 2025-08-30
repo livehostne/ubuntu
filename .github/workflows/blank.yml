@@ -1,0 +1,56 @@
+name: Ubuntu SSH Access
+
+on: [push, workflow_dispatch]
+
+jobs:
+  setup-ssh:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up SSH Server
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openssh-server wget jq dnsutils
+        sudo systemctl enable ssh
+        sudo systemctl start ssh
+        echo "runner:P@ssw0rd" | sudo chpasswd
+        echo "✅ SSH server instalado e configurado"
+
+    - name: Install ngrok
+      run: |
+        wget -q https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+        tar xf ngrok-v3-stable-linux-amd64.tgz
+        chmod +x ./ngrok
+        echo "✅ ngrok instalado"
+
+    - name: Authenticate ngrok
+      run: ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Expose SSH via ngrok and resolve to IP
+      run: |
+        ./ngrok tcp 22 --log=stdout > ngrok.log &
+        sleep 8
+        NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+        NGROK_HOST=$(echo $NGROK_URL | sed -E 's#tcp://([^:]+):([0-9]+)#\1#')
+        NGROK_PORT=$(echo $NGROK_URL | sed -E 's#tcp://([^:]+):([0-9]+)#\2#')
+        NGROK_IP=$(dig +short $NGROK_HOST | tail -n1)
+
+        echo "====================================="
+        echo "🚀 SSH Túnel Criado via ngrok"
+        echo "Host: $NGROK_IP"
+        echo "Porta: $NGROK_PORT"
+        echo "Usuário: runner"
+        echo "Senha: P@ssw0rd"
+        echo "Comando para conectar:"
+        echo "ssh runner@$NGROK_IP -p $NGROK_PORT"
+        echo "====================================="
+
+    - name: Keep the job running
+      run: |
+        echo "⏳ Mantendo sessão ativa por até 6h..."
+        sleep 21600
