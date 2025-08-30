@@ -1,57 +1,55 @@
-  name: macOS SSH Access (ngrok)
+name: Windows RDP Access (ngrok)
 
 on: [push, workflow_dispatch]
 
 jobs:
-  setup-ssh:
-    runs-on: macos-latest
+  setup-rdp:
+    runs-on: windows-latest
 
     steps:
-    - name: Set up SSH Server
+    - name: Set user password
       run: |
-        # Remote Login (SSH) já vem ativo, mas vamos garantir
-        sudo systemsetup -setremotelogin on || true
+        net user runneradmin P@ssw0rd
 
-        # Alterar senha do usuário runner (macOS não tem chpasswd)
-        sudo dscl . -passwd /Users/runner P@ssw0rd
-
-        echo "✅ SSH server configurado no macOS"
-
-    - name: Install dependencies
+    - name: Enable RDP
       run: |
-        brew install wget jq
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 0 /f
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 1 /f
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Install ngrok
+    - name: Download ngrok
       run: |
-        wget -q https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-amd64.tgz
-        tar xf ngrok-v3-stable-darwin-amd64.tgz
-        chmod +x ./ngrok
-        echo "✅ ngrok instalado"
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive ngrok.zip -DestinationPath .
+        Rename-Item ngrok.exe ngrokw.exe
 
     - name: Authenticate ngrok
-      run: ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+      run: .\ngrokw.exe authtoken $env:NGROK_AUTH_TOKEN
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Expose SSH via ngrok
+    - name: Expose RDP via ngrok
       run: |
-        ./ngrok tcp 22 --log=stdout > ngrok.log &
-        sleep 8
+        Start-Process -NoNewWindow -FilePath .\ngrokw.exe -ArgumentList "tcp 3389 --log=stdout" -RedirectStandardOutput ngrok.log
+        Start-Sleep -s 10
 
-        NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
-        NGROK_HOST=$(echo $NGROK_URL | sed -E 's#tcp://([^:]+):([0-9]+)#\1#')
-        NGROK_PORT=$(echo $NGROK_URL | sed -E 's#tcp://([^:]+):([0-9]+)#\2#')
+        $ngrokApi = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
+        $publicUrl = $ngrokApi.tunnels[0].public_url
+        $host = ($publicUrl -split '[:/]')[3]
+        $port = ($publicUrl -split ':')[2]
 
-        echo "====================================="
-        echo "🚀 SSH Túnel Criado via ngrok (macOS)"
-        echo "Host: $NGROK_HOST"
-        echo "Porta: $NGROK_PORT"
-        echo "Usuário: runner"
-        echo "Senha: P@ssw0rd"
-        echo ""
-        echo "Comando para conectar:"
-        echo "ssh runner@$NGROK_HOST -p $NGROK_PORT"
-        echo "====================================="
+        Write-Output "====================================="
+        Write-Output "🚀 RDP Túnel Criado via ngrok (Windows)"
+        Write-Output "Host: $host"
+        Write-Output "Porta: $port"
+        Write-Output "Usuário: runneradmin"
+        Write-Output "Senha: P@ssw0rd"
+        Write-Output ""
+        Write-Output "➡️ Como conectar no Windows (cliente RDP):"
+        Write-Output "   Endereço: $host:$port"
+        Write-Output "   Usuário: runneradmin"
+        Write-Output "   Senha: P@ssw0rd"
+        Write-Output "====================================="
 
-    - name: Keep the job running
-      run: sleep 6h
+    - name: Keep session alive
+      run: timeout 21600
