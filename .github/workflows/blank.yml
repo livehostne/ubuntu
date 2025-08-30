@@ -28,32 +28,10 @@ jobs:
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Expose RDP via ngrok
-      shell: pwsh
+    - name: Start ngrok TCP for RDP
       run: |
-        # Inicia ngrok em background
         Start-Job { .\ngrokw.exe tcp 3389 --log=stdout } | Out-Null
-        Start-Sleep -s 10
-
-        # Captura URL pública via API do ngrok
-        $ngrokApi = Invoke-RestMethod -Uri http://127.0.0.1:4040/api/tunnels
-        $publicUrl = $ngrokApi.tunnels[0].public_url
-        $host = ($publicUrl -split '[:/]')[3]
-        $port = ($publicUrl -split ':')[2]
-
-        Write-Output "====================================="
-        Write-Output "🚀 RDP Túnel Criado via ngrok (Windows)"
-        Write-Output "Host: $host"
-        Write-Output "Porta: $port"
-        Write-Output "Usuário: runneradmin"
-        Write-Output "Senha: P@ssw0rd"
-        Write-Output ""
-        Write-Output "➡️ Como conectar no Windows (cliente RDP):"
-        Write-Output ("   Endereço: " + $host + ":" + $port)
-        Write-Output "   Usuário: runneradmin"
-        Write-Output "   Senha: P@ssw0rd"
-        Write-Output "====================================="
-
+        Start-Sleep -s 5
 
     - name: Keep session alive
       run: timeout 21600
