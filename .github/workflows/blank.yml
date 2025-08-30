@@ -1,4 +1,4 @@
-name: macOS SSH Access (ngrok)
+  name: macOS SSH Access (ngrok)
 
 on: [push, workflow_dispatch]
 
@@ -9,10 +9,12 @@ jobs:
     steps:
     - name: Set up SSH Server
       run: |
-        # Habilitar SSH no macOS runner
-        sudo systemsetup -setremotelogin on
-        # Definir senha para o usuário "runner"
-        echo "runner:P@ssw0rd" | sudo chpasswd
+        # Remote Login (SSH) já vem ativo, mas vamos garantir
+        sudo systemsetup -setremotelogin on || true
+
+        # Alterar senha do usuário runner (macOS não tem chpasswd)
+        sudo dscl . -passwd /Users/runner P@ssw0rd
+
         echo "✅ SSH server configurado no macOS"
 
     - name: Install dependencies
